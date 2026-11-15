@@ -1,4 +1,4 @@
-name: pdb-eof-repro
+name: pdb-eof-all-actions
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 jobs:
   before:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
@@ -20,30 +20,45 @@ jobs:
         run: |
           base=$(git merge-base origin/main HEAD)
           git show "$base:testing/test_debugging.py" > testing/test_debugging.py
-          git diff --stat
       - name: Install
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e . pexpect pytest-xdist
-      - name: Run 50 rounds
+      - name: "Natural load: 100 rounds, -n 4"
         run: |
           set +e
           fails=0
-          : > /tmp/all-fails.txt
-          for i in $(seq 1 200); do
+          : > /tmp/nfails.txt
+          for i in $(seq 1 100); do
             python -m pytest testing/test_debugging.py -q -p no:cacheprovider -n 4 --tb=line \
-              > /tmp/run.log 2>&1 || {
+              > /tmp/n.log 2>&1 || {
                 fails=$((fails + 1))
-                grep -E '^FAILED ' /tmp/run.log >> /tmp/all-fails.txt
-                cp /tmp/run.log "/tmp/fail-${fails}.log"
+                grep -E '^FAILED ' /tmp/n.log >> /tmp/nfails.txt
               }
           done
-          echo "BEFORE_RESULT: ${fails} / 200 rounds failed"
-          sort /tmp/all-fails.txt | uniq -c | sort -rn
+          echo "BEFORE_NATURAL: ${fails} / 100 rounds failed"
+          sort /tmp/nfails.txt | uniq -c | sort -rn
+      - name: "Stress: 50 rounds, -n 6 with 2 cpu hogs"
+        run: |
+          set +e
+          for j in 1 2; do (while :; do :; done) & done
+          hogs=$(jobs -p)
+          fails=0
+          : > /tmp/sfails.txt
+          for i in $(seq 1 50); do
+            python -m pytest testing/test_debugging.py -q -p no:cacheprovider -n 6 --tb=line \
+              > /tmp/s.log 2>&1 || {
+                fails=$((fails + 1))
+                grep -E '^FAILED ' /tmp/s.log >> /tmp/sfails.txt
+              }
+          done
+          kill $hogs 2>/dev/null
+          echo "BEFORE_STRESS: ${fails} / 50 rounds failed"
+          sort /tmp/sfails.txt | uniq -c | sort -rn
 
   after:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,12 +70,24 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e . pexpect pytest-xdist
-      - name: Run 50 rounds
+      - name: "Natural load: 100 rounds, -n 4"
         run: |
           set +e
           fails=0
-          for i in $(seq 1 200); do
+          for i in $(seq 1 100); do
             python -m pytest testing/test_debugging.py -q -p no:cacheprovider -n 4 --tb=line \
-              > /tmp/run.log 2>&1 || fails=$((fails + 1))
+              > /tmp/n.log 2>&1 || fails=$((fails + 1))
           done
-          echo "AFTER_RESULT: ${fails} / 200 rounds failed"
+          echo "AFTER_NATURAL: ${fails} / 100 rounds failed"
+      - name: "Stress: 50 rounds, -n 6 with 2 cpu hogs"
+        run: |
+          set +e
+          for j in 1 2; do (while :; do :; done) & done
+          hogs=$(jobs -p)
+          fails=0
+          for i in $(seq 1 50); do
+            python -m pytest testing/test_debugging.py -q -p no:cacheprovider -n 6 --tb=line \
+              > /tmp/s.log 2>&1 || fails=$((fails + 1))
+          done
+          kill $hogs 2>/dev/null
+          echo "AFTER_STRESS: ${fails} / 50 rounds failed"
