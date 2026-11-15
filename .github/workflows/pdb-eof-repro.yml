@@ -30,7 +30,7 @@ jobs:
           set +e
           fails=0
           : > /tmp/all-fails.txt
-          for i in $(seq 1 50); do
+          for i in $(seq 1 200); do
             python -m pytest testing/test_debugging.py -q -p no:cacheprovider -n 4 --tb=line \
               > /tmp/run.log 2>&1 || {
                 fails=$((fails + 1))
@@ -38,7 +38,7 @@ jobs:
                 cp /tmp/run.log "/tmp/fail-${fails}.log"
               }
           done
-          echo "BEFORE_RESULT: ${fails} / 50 rounds failed"
+          echo "BEFORE_RESULT: ${fails} / 200 rounds failed"
           sort /tmp/all-fails.txt | uniq -c | sort -rn
 
   after:
@@ -59,8 +59,8 @@ jobs:
         run: |
           set +e
           fails=0
-          for i in $(seq 1 50); do
+          for i in $(seq 1 200); do
             python -m pytest testing/test_debugging.py -q -p no:cacheprovider -n 4 --tb=line \
               > /tmp/run.log 2>&1 || fails=$((fails + 1))
           done
-          echo "AFTER_RESULT: ${fails} / 50 rounds failed"
+          echo "AFTER_RESULT: ${fails} / 200 rounds failed"
