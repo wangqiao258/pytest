@@ -215,9 +215,12 @@ class TestPDB:
         child = pytester.spawn_pytest(f"--pdb {p1}")
         child.expect("Pdb")
         child.sendline("p self.filename")
+        child.expect("debug.me")
+        # Wait for the next prompt: an EOF sent while pdb is still busy can
+        # get lost, leaving the child waiting for input.
+        child.expect("Pdb")
         child.sendeof()
-        rest = child.read().decode("utf8")
-        assert "debug.me" in rest
+        child.read()
         self.flush(child)
 
     def test_pdb_unittest_skip(self, pytester: Pytester) -> None:
@@ -339,6 +342,9 @@ class TestPDB:
         child.expect("Pdb")
         child.sendline("globalfunc")
         child.expect(".*function")
+        # Wait for the next prompt: an EOF sent while pdb is still busy can
+        # get lost, leaving the child waiting for input.
+        child.expect("Pdb")
         child.sendeof()
         child.expect("1 failed")
         self.flush(child)
@@ -499,6 +505,9 @@ class TestPDB:
         child.expect_exact(
             "[('test_pdb_with_caplog_on_pdb_invocation', 30, 'some_warning')]"
         )
+        # Wait for the next prompt: an EOF sent while pdb is still busy can
+        # get lost, leaving the child waiting for input.
+        child.expect("Pdb")
         child.sendeof()
         child.read()
         self.flush(child)
